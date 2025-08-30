@@ -6,8 +6,8 @@
    new files. */
 
 #include <stddef.h>
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "Skeleton.h"
 
@@ -71,6 +71,9 @@ void visitGraph(Graph p, Visitor *visitor, void *context) {
 }
 
 void visitBinding(Binding p, Visitor *visitor, void *context) {
+
+  visitor->visitBindingCallback(p, context);
+
   switch (p->kind) {
   case is_VBind:
     visitor->visitIsVBindCallback(p, context);
@@ -100,11 +103,92 @@ void visitGraphBinding(GraphBinding p, Visitor *visitor, void *context) {
   }
 }
 
+void visitAttrVal(AttrVal p, Visitor *visitor, void *context)
+{
+  visitor->visitAttrVal(p);
+
+  switch(p->kind)
+  {
+  case is_AttributeValue:
+    visitor->visitIsAttributeValue(p->u.attributeValue_.lvar_, context);
+    visitLVar(p->u.attributeValue_.lvar_);
+    break;
+  case is_AttributeValueQuoted:
+    visitor->visitIsAttributeValueQuoted(p->u.attributeValueQuoted_.lvar_, context)
+    visitLVar(p->u.attributeValueQuoted_.lvar_);
+    break;
+
+  default:
+    fprintf(stderr, "Error: bad kind field when printing AttrVal!\n");
+    exit(1);
+  }
+}
+
+void visitAttrName(AttrName p, Visitor *visitor, void *context)
+{
+  visitor->visitAttrName(p);
+
+  switch(p->kind)
+  {
+  case is_AttributeName:
+    visitor->visitIsAttributeName(p->u.attributeName_.lvar_, context);
+    visitLVar(p->u.attributeName_.lvar_, visitor, context);
+    break;
+
+  default:
+    fprintf(stderr, "Error: bad kind field when printing AttrName!\n");
+    exit(1);
+  }
+}
+
+void visitAttr(Attr p, Visitor *visitor, void *context)
+{
+  visitor->visitAttr(p, context);
+
+  switch(p->kind)
+  {
+  case is_AttributePair:
+    visitor->visitIsAttributePair(p->u.attributePair_.attrname_, context);
+    visitAttrName(p->u.attributePair_.attrname_, visitor, context);
+    visitAttrVal(p->u.attributePair_.attrval_, visitor, context);
+    break;
+
+  default:
+    fprintf(stderr, "Error: bad kind field when printing Attr!\n");
+    exit(1);
+  }
+}
+
+void visitListAttr(ListAttr p, Visitor *visitor, void *context)
+{
+  visitor->visitListAttr(p, context);
+
+  switch(p->kind)
+  {
+  case is_EmptyAttrList:
+    visitor->visitIsEmptyAttrList(p, visitor, context);
+    break;
+  case is_AttrList:
+    visitor->visitIsAttrList(p->u.attrList_.attr_, context);
+    visitAttr(p->u.attrList_.attr_,visitor, context);
+    visitListAttr(p->u.attrList_.listattr_,visitor, context);
+    break;
+
+  default:
+    fprintf(stderr, "Error: bad kind field when printing ListAttr!\n");
+    exit(1);
+  }
+}
+
 void visitVertex(Vertex p, Visitor *visitor, void *context) {
+
+  visitor->visitVertexCallback(p, context);
+
   switch (p->kind) {
   case is_VName:
     visitor->visitIsVNameCallback(p, context);
     visitName(p->u.vName_.name_, visitor, context);
+    visitListAttr(p->u.vName_.listattr_, visitor, context);
     break;
 
   default:
@@ -116,15 +200,13 @@ void visitVertex(Vertex p, Visitor *visitor, void *context) {
 void visitName(Name p, Visitor *visitor, void *context) {
   switch (p->kind) {
   case is_NameWildcard:
-    visitor->visitNameWildcardCallback(p, context);
+    visitor->visitIsNameWildcardCallback(p, context);
     break;
   case is_NameVVar:
-    visitor->visitNameVVarCallback(p, context);
-    visitLVar(p->u.nameVVar_.lvar_, visitor, context);
+    visitor->visitIsNameVVarCallback(p, context);
     break;
   case is_NameGVar:
-    visitor->visitNameGVarCallback(p, context);
-    visitUVar(p->u.nameGVar_.uvar_, visitor, context);
+    visitor->visitIsNameGVarCallback(p, context);
     break;
   case is_NameQuoteGraph:
     visitor->visitIsNameQuoteGraph(p, context);
@@ -134,6 +216,7 @@ void visitName(Name p, Visitor *visitor, void *context) {
     visitor->visitIsNameQuoteVertex(p, context);
     visitVertex(p->u.nameQuoteVertex_.vertex_, visitor, context);
     break;
+
   default:
     fprintf(stderr, "Error: bad kind field when printing Name!\n");
     exit(1);
@@ -141,8 +224,9 @@ void visitName(Name p, Visitor *visitor, void *context) {
 }
 
 void visitListName(ListName listname, Visitor *visitor, void *context) {
+  visitor->visitListName(listname, context);
+
   while (listname != 0) {
-    visitor->visitListName(listname, context);
     visitName(listname->name_, visitor, context);
     listname = listname->listname_;
   }

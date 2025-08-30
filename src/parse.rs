@@ -35,7 +35,7 @@ fn save_context(context: *mut String, content: String) {
 }
 
 visitor_callback!(visitIsGTensorCallback, Graph, |p, context| format!(
-    "{context}Gnil Called"
+    "{context}visitIsGTensorCallback"
 ));
 
 visitor_callback!(visitIsGNominate, Graph, |p, context| format!(
@@ -97,9 +97,11 @@ visitor_callback!(visitStringCallback, *mut i8, |p, context| format!(
 visitor_callback!(visitIsGVertexCallback, Graph, |p, context| format!(
     "{context}visitIsGVertexCallback"
 ));
-visitor_callback!(visitIsGNilCallback, Graph, |p, context| format!(
-    "{context}visitIsGNilCallback"
-));
+visitor_callback!(
+    visitIsGNilCallback,
+    Graph,
+    |p, context: &'static mut String| context.replace("new %vertexes in {%placehodler}", "")
+);
 visitor_callback!(visitIsVBindCallback, Binding, |p, context| format!(
     "{context}visitIsVBindCallback"
 ));
@@ -127,9 +129,14 @@ visitor_callback!(visitIsNameQuoteVertex, Name, |p, context| format!(
 visitor_callback!(visitListName, ListName, |p, context| format!(
     "{context}visitListName"
 ));
-visitor_callback!(visitGraphCallback, Graph, |p, context| format!(
-    "{context}visitGraph"
-));
+visitor_callback!(
+    visitGraphCallback,
+    Graph,
+    |p, context: &'static mut String| {
+        let placeholder = "new %vertexes in {%placehodler}";
+        context.replace("%placeholder", placeholder)
+    }
+);
 
 pub fn parse(document: String) -> std::result::Result<String, String> {
     let mut visitor = Visitor {
@@ -169,11 +176,7 @@ pub fn parse(document: String) -> std::result::Result<String, String> {
     let document = CString::from_str(&document).map_err(|e| e.to_string())?;
     let ptr = document.as_ptr();
 
-    let contract = r#"
-      contract %contract_name(%arguments){
-        %body
-      }
-    "#;
+    let contract = r#"contract %contract_name(%contract_arguments){%placeholder}"#;
 
     let rholang_representation = String::from_str(contract).map(Box::new).unwrap();
     let rholang_representation_ptr = Box::into_raw(rholang_representation);
@@ -212,13 +215,10 @@ mod tests {
 
     #[test]
     fn test_parse_empty_graph() {
-        let statement = String::from_str("{0}").unwrap();
+        let statement = String::from_str("0").unwrap();
         let result = parse(statement).unwrap();
 
-        assert_eq!(
-            result,
-            "contract %contract_name(%arguments){%body}visitGraphvisitIsGNilCallback"
-        );
+        assert_eq!(result, "contract %contract_name(%contract_arguments){}");
     }
 
     #[test]
